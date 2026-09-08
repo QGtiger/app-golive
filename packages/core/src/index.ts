@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
 export const projectSchema = z.object({
+  // 客户端生成的稳定 ID（/detail/:id 路由与最近项目的键）；由 store 落盘时兜底生成
+  id: z.string().min(1).optional(),
   source: z.string().min(1),
   appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,62}$/, '应用名称只能包含小写字母、数字和连字符'),
   script: z.string().max(20000),
@@ -20,8 +22,7 @@ export const settingsSchema = z.object({
   accessKeySecret: z.string(),
   publicBaseUrl: z.string().url(),
   domainSuffix: z.string().min(1),
-  protocol: z.enum(['https', 'http']),
-  token: z.string()
+  protocol: z.enum(['https', 'http'])
 })
 export type Settings = z.infer<typeof settingsSchema>
 
@@ -33,12 +34,7 @@ export const defaultSettings: Settings = {
   accessKeySecret: '',
   publicBaseUrl: '',
   domainSuffix: 'lightfish.top',
-  protocol: 'https',
-  token: ''
-}
-
-export interface SaveSettingsOptions {
-  clearSecrets?: boolean
+  protocol: 'https'
 }
 
 export interface AppEntry {
@@ -81,13 +77,13 @@ export interface Progress {
 export type PublishOutcome =
   | { status: 'published'; url: string; version: number; ossIndexUrl: string }
   | { status: 'uncertain'; version: number; ossIndexUrl: string; message: string }
+  /** 确定性失败以结果返回（不走 reject），code 供界面给出针对性修复引导 */
+  | { status: 'failed'; code: 'asset-base'; message: string }
   | { status: 'cancelled' }
 
 export interface SavedState {
   settings: Settings
   projects: Project[]
-  hasSecrets: boolean
-  hasToken: boolean
 }
 
 export interface DesktopAPI {
@@ -95,13 +91,18 @@ export interface DesktopAPI {
   select(kind: 'source' | 'folder' | 'html'): Promise<string | null>
   inspect(path: string): Promise<Project>
   pathForFile(file: File): string
-  saveProject(project: Project): Promise<void>
-  saveSettings(settings: Settings, options?: SaveSettingsOptions): Promise<void>
+  saveProject(project: Project): Promise<Project>
+  /** 删除本机保存的项目记录（不影响服务端应用） */
+  removeProject(id: string): Promise<void>
+  /** 保存全局连接设置（含明文凭据，整体落盘） */
+  saveSettings(settings: Settings): Promise<void>
   publish(project: Project): Promise<PublishOutcome>
   cancel(): Promise<void>
   open(url: string): Promise<void>
   copy(text: string): Promise<void>
   onProgress(callback: (progress: Progress) => void): () => void
+  /** macOS：从 Dock 图标或访达“打开方式”打开项目文件/目录 */
+  onOpenPath(callback: (path: string) => void): () => void
 }
 
 export class CancelledError extends Error {

@@ -12,11 +12,15 @@
   },
   "dependencies": {
     "@golive/core": "workspace:*",
+    "@lightfish/react-model": "^0.0.1",
+    "@lightfish/router": "^0.0.1",
+    "ahooks": "^3.10.0",
     "ali-oss": "^6.23.0",
     "cheerio": "^1.1.0",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-router-dom": "6.21.1",
     "zod": "^4.0.0"
   },
   "devDependencies": {

@@ -1,1 +1,18 @@
-{"name":"golive","version":"0.1.0","private":true,"packageManager":"pnpm@10.34.3","scripts":{"dev":"pnpm --filter @golive/desktop dev","build":"pnpm --filter @golive/desktop build","typecheck":"tsc --noEmit","test":"tsx --test tests/*.test.ts","pack":"pnpm --filter @golive/desktop run pack"},"devDependencies":{"@types/node":"^24.0.0","tsx":"^4.20.0","typescript":"^5.9.0"}}
+{
+  "name": "golive",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.34.3",
+  "scripts": {
+    "dev": "pnpm --filter @golive/desktop dev",
+    "build": "pnpm --filter @golive/desktop build",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "pack": "pnpm --filter @golive/desktop run pack"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

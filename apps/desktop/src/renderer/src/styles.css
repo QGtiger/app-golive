@@ -166,6 +166,15 @@ button.card-row:hover {
   background: #fafbfc;
 }
 
+/* 卡片内展开的危险操作行（删除本机记录） */
+button.card-row.danger {
+  color: var(--danger);
+}
+
+button.card-row.danger:hover {
+  background: #fef3f2;
+}
+
 .card-row + .card-row {
   border-top: 1px solid var(--border);
 }
@@ -325,10 +334,33 @@ button.card-row:hover {
 .input-row {
   display: flex;
   gap: 8px;
+  align-items: stretch;
 }
 
 .input-row input {
   flex: 1;
+}
+
+/* 输入行内的目录选择按钮：宽度固定、高度跟随输入框拉伸 */
+.input-row .icon-btn {
+  width: 40px;
+  height: auto;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text-2);
+}
+
+.input-row .icon-btn:hover {
+  background: #f0f5ff;
+  color: var(--primary);
+}
+
+.input-row .icon-btn:disabled {
+  color: #c4c9d4;
+  cursor: default;
+  background: var(--card);
 }
 
 input[type='text'],
@@ -358,9 +390,15 @@ textarea {
   font-size: 12px;
 }
 
+/* 自绘下拉箭头：原生箭头贴边显示，这里内缩到与输入框 10px 内边距对齐 */
 select {
   cursor: pointer;
   width: auto;
+  appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
 
 .stages {
@@ -545,4 +583,41 @@ details.log[open] > summary {
   color: var(--text-2);
   font-size: 12px;
   margin-bottom: 4px;
+}
+
+/* 修复 Prompt 卡片：可复制给 Code Agent 的修复指引 */
+.prompt-card {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.prompt-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.prompt-header .grow {
+  flex: 1;
+}
+
+.prompt-box {
+  background: #f8f9fc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+  white-space: pre-wrap;
+  user-select: text;
+  cursor: text;
+  min-height: 80px;
+  max-height: 260px;
+  overflow-y: auto;
 }

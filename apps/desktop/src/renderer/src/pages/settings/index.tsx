@@ -1,33 +1,30 @@
+/** 全局设置页（/settings）：连接配置与凭据管理 */
 import { useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
-import type { Settings } from '@golive/core'
-import { settingsSchema } from '@golive/core'
-import { api } from '../api'
+import { settingsSchema, type Settings } from '@golive/core'
+import { useApp } from '../../appModel'
 
-interface SettingsProps {
-  settings: Settings
-  hasSecrets: boolean
-  hint: string | null
-  onBack(): void
-  onSave(next: Settings): void
-  onCleared(): void
-}
-
-export function SettingsView({ settings, hasSecrets, hint, onBack, onSave, onCleared }: SettingsProps) {
-  const [draft, setDraft] = useState<Settings>(settings)
+export default function SettingsPage() {
+  const { settings, hint, persistSettings, dismissHint, goHome } = useApp()
+  const [draft, setDraft] = useState<Settings | null>(settings)
   const [error, setError] = useState<string | null>(null)
-  const set = (patch: Partial<Settings>) => setDraft(prev => ({ ...prev, ...patch }))
+  // 保存成功的即时反馈：按钮短暂变为“已保存”
+  const [saved, setSaved] = useState(false)
 
-  const submit = (options?: { clearSecrets?: boolean }) => {
+  if (!settings || !draft) return null
+  const set = (patch: Partial<Settings>) => setDraft(prev => (prev ? { ...prev, ...patch } : prev))
+
+  const submit = () => {
     setError(null)
     try {
       const parsed = settingsSchema.parse(draft)
-      void api
-        .saveSettings(parsed, options)
-        .then(() => {
-          if (options?.clearSecrets) onCleared()
-          onSave({ ...parsed, accessKeySecret: '', token: '' })
-        }, (reason: Error) => setError(reason.message))
+      persistSettings(parsed).then(
+        () => {
+          setSaved(true)
+          window.setTimeout(() => setSaved(false), 2000)
+        },
+        (reason: Error) => setError(reason.message)
+      )
     } catch (reason) {
       setError((reason as Error).message)
     }
@@ -37,7 +34,12 @@ export function SettingsView({ settings, hasSecrets, hint, onBack, onSave, onCle
     <>
       <header className="header">
         <div className="back-row" style={{ padding: 0 }}>
-          <button onClick={onBack}>
+          <button
+            onClick={() => {
+              dismissHint()
+              goHome()
+            }}
+          >
             <ChevronLeft size={17} />
             返回
           </button>
@@ -71,13 +73,8 @@ export function SettingsView({ settings, hasSecrets, hint, onBack, onSave, onCle
 
         <div className="field">
           <label>OSS AccessKey Secret</label>
-          <input
-            type="password"
-            placeholder={hasSecrets ? '已保存，留空保持不变' : ''}
-            value={draft.accessKeySecret}
-            onChange={event => set({ accessKeySecret: event.target.value })}
-          />
-          <span className="note">保存在系统安全存储中，不会回显</span>
+          <input type="text" value={draft.accessKeySecret} onChange={event => set({ accessKeySecret: event.target.value })} />
+          <span className="note">明文保存在本机 golive.json，与 AccessKey ID 一样可直接编辑</span>
         </div>
 
         <div className="field">
@@ -99,11 +96,8 @@ export function SettingsView({ settings, hasSecrets, hint, onBack, onSave, onCle
           </select>
         </div>
       </div>
-      <div className="footer stack">
-        <button className="btn" onClick={() => submit()}>保存设置</button>
-        {hasSecrets && (
-          <button className="btn danger-ghost" onClick={() => submit({ clearSecrets: true })}>清除凭据</button>
-        )}
+      <div className="footer">
+        <button className="btn" onClick={submit}>{saved ? '已保存 ✓' : '保存设置'}</button>
       </div>
     </>
   )

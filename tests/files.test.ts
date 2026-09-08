@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { collectFiles, inspectSource, prepareCss, prepareHtml } from '../apps/desktop/src/main/files'
+import { AssetRefError, collectFiles, inspectSource } from '../apps/desktop/src/main/files'
 
 async function tmp(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'golive-test-'))
@@ -101,33 +101,36 @@ test('上传内容不存在时给出具体路径', async () => {
   await assert.rejects(collectFiles(project), /上传内容不存在/)
 })
 
-test('prepareHtml 注入版本目录 base 并改写根路径引用', () => {
-  const html =
-    '<!doctype html><html><head><title>t</title><link rel="stylesheet" href="/css/a.css"></head>' +
-    '<body><script src="/js/a.js"></script><script src="./rel.js"></script><script src="https://cdn.example.com/r.js"></script>' +
-    '<img src="/img/a.png" srcset="/img/a.png 2x, b.png 1x"><a href="/next">n</a></body></html>'
-  const out = prepareHtml(html, 'app/7/index.html', 'https://static.example.com')
-  assert.ok(out.includes('<base href="https://static.example.com/app/7/">'))
-  assert.ok(out.includes('href="https://static.example.com/css/a.css"'))
-  assert.ok(out.includes('src="https://static.example.com/js/a.js"'))
-  assert.ok(out.includes('src="./rel.js"'))
-  assert.ok(out.includes('src="https://cdn.example.com/r.js"'))
-  assert.ok(out.includes('srcset="https://static.example.com/img/a.png 2x, b.png 1x"'))
-  assert.ok(out.includes('href="/next"'))
+test('HTML 相对与根路径资源引用导致校验失败并提示资源基址', async () => {
+  const root = await tmp()
+  const project = { ...(await inspectSource(root, 'lightfish.top')), upload: 'dist', entry: 'index.html', script: '', appId: 'x', domain: 'x.top', note: '' }
+  await write(root, 'dist/index.html', '<!doctype html><script src="/assets/a.js"></script>')
+  await assert.rejects(collectFiles(project), (error: unknown) => error instanceof AssetRefError && /404/.test((error as Error).message))
+  await write(root, 'dist/index.html', '<!doctype html><script src="./assets/a.js"></script>')
+  await assert.rejects(collectFiles(project), (error: unknown) => error instanceof AssetRefError)
 })
 
-test('prepareHtml 尊重已有 base 的相对解析', () => {
-  const html = '<!doctype html><html><head><base href="sub/"></head><body><script src="a.js"></script></body></html>'
-  const out = prepareHtml(html, 'app/7/index.html', 'https://static.example.com')
-  assert.ok(out.includes('<base href="https://static.example.com/app/7/sub/">'))
-  assert.ok(out.includes('src="a.js"'))
+test('HTML 完整 URL 与 data 引用通过校验', async () => {
+  const root = await tmp()
+  await write(
+    root,
+    'dist/index.html',
+    '<!doctype html><script src="https://cdn.example.com/a.js"></script>' +
+    '<img src="data:image/png;base64,AA"><img srcset="https://cdn.example.com/a.png 2x">' +
+    '<link rel="stylesheet" href="https://cdn.example.com/s.css"><a href="/next">n</a>'
+  )
+  const project = { ...(await inspectSource(root, 'lightfish.top')), upload: 'dist', entry: 'index.html', script: '', appId: 'x', domain: 'x.top', note: '' }
+  const { files } = await collectFiles(project)
+  assert.equal(files.length, 1)
 })
 
-test('prepareCss 改写根路径 url 与 @import，保留相对与远程', () => {
-  const css = 'a{background:url("/x/a.png")}b{background:url(./y.png)}c{background:url(https://cdn.example.com/z.png)}@import "/m.css";'
-  const out = prepareCss(css, 'https://static.example.com')
-  assert.ok(out.includes('url("https://static.example.com/x/a.png")'))
-  assert.ok(out.includes('url(./y.png)'))
-  assert.ok(out.includes('url(https://cdn.example.com/z.png)'))
-  assert.ok(out.includes('@import "https://static.example.com/m.css";'))
+test('CSS 相对引用放行，根路径 url 与 @import 拒绝', async () => {
+  const root = await tmp()
+  await write(root, 'dist/index.html', '<h1>ok</h1>')
+  await write(root, 'dist/css/a.css', 'a{background:url(../img/y.png)}')
+  const project = { ...(await inspectSource(root, 'lightfish.top')), upload: 'dist', entry: 'index.html', script: '', appId: 'x', domain: 'x.top', note: '' }
+  const { files } = await collectFiles(project)
+  assert.equal(files.length, 2)
+  await write(root, 'dist/css/a.css', 'a{background:url(/img/y.png)}@import "/other.css";')
+  await assert.rejects(collectFiles(project), /url\(\/img\/y\.png\)/)
 })

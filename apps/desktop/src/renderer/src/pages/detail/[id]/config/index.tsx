@@ -1,19 +1,20 @@
+/** 项目发布配置（/detail/:id/config）：编辑并保存当前项目的发布配置 */
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, Folder } from 'lucide-react'
-import type { Project } from '@golive/core'
-import { projectSchema } from '@golive/core'
-import { api } from '../api'
+import { projectSchema, type Project } from '@golive/core'
+import { api } from '../../../../api'
+import { useProject } from '../model'
 
-interface ConfigProps {
-  project: Project
-  onBack(): void
-  onSave(draft: Project): void
-}
-
-export function ConfigView({ project, onBack, onSave }: ConfigProps) {
-  const [draft, setDraft] = useState<Project>(project)
+export default function ProjectConfigPage() {
+  const { project, saveDraft } = useProject()
+  const navigate = useNavigate()
+  const [draft, setDraft] = useState<Project | null>(project)
   const [error, setError] = useState<string | null>(null)
-  const set = (patch: Partial<Project>) => setDraft(prev => ({ ...prev, ...patch }))
+
+  if (!project?.id || !draft) return null
+  const back = () => navigate(`/detail/${project.id}`)
+  const set = (patch: Partial<Project>) => setDraft(prev => (prev ? { ...prev, ...patch } : prev))
 
   const pickDir = async (field: 'cwd' | 'upload') => {
     const path = await api.select('folder')
@@ -24,7 +25,7 @@ export function ConfigView({ project, onBack, onSave }: ConfigProps) {
     setError(null)
     try {
       const parsed = projectSchema.parse(draft)
-      void api.saveProject(parsed).then(() => onSave(parsed), (reason: Error) => setError(reason.message))
+      saveDraft(parsed).then(back, (reason: Error) => setError(reason.message))
     } catch (reason) {
       setError((reason as Error).message)
     }
@@ -36,7 +37,7 @@ export function ConfigView({ project, onBack, onSave }: ConfigProps) {
     <>
       <header className="header">
         <div className="back-row" style={{ padding: 0 }}>
-          <button onClick={onBack}>
+          <button onClick={back}>
             <ChevronLeft size={17} />
             返回
           </button>
@@ -61,15 +62,15 @@ export function ConfigView({ project, onBack, onSave }: ConfigProps) {
             placeholder="pnpm run build"
             onChange={event => set({ script: event.target.value })}
           />
-          <span className="note">上传前在执行目录运行，多行命令按顺序执行，留空直接上传</span>
+          <span className="note">上传前在执行目录运行，多行命令按顺序执行，留空直接上传。构建需注入资源基址（如 vite build --base "$GOLIVE_ASSET_BASE"），否则资源引用校验会失败</span>
         </div>
 
         <div className="field">
           <label>执行目录</label>
           <div className="input-row">
             <input type="text" value={draft.cwd} onChange={event => set({ cwd: event.target.value })} />
-            <button className="icon-btn" style={{ border: '1px solid var(--border)', background: '#fff' }} title="选择目录" onClick={() => void pickDir('cwd')}>
-              <Folder size={15} />
+            <button className="icon-btn" title="选择目录" onClick={() => void pickDir('cwd')}>
+              <Folder size={16} />
             </button>
           </div>
         </div>
@@ -79,8 +80,8 @@ export function ConfigView({ project, onBack, onSave }: ConfigProps) {
           <div className="input-row">
             <input type="text" value={draft.upload} onChange={event => set({ upload: event.target.value })} />
             {!singleFile && (
-              <button className="icon-btn" style={{ border: '1px solid var(--border)', background: '#fff' }} title="选择目录" onClick={() => void pickDir('upload')}>
-                <Folder size={15} />
+              <button className="icon-btn" title="选择目录" onClick={() => void pickDir('upload')}>
+                <Folder size={16} />
               </button>
             )}
           </div>

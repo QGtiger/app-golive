@@ -19,14 +19,13 @@ const settings: Settings = {
   accessKeySecret: 'sk-secret-value',
   publicBaseUrl: 'https://static.example.com',
   domainSuffix: 'lightfish.top',
-  protocol: 'https',
-  token: ''
+  protocol: 'https'
 }
 
 async function makeProject(script = 'pnpm run build', note = 'first release') {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'golive-pub-'))
   await fs.mkdir(path.join(root, 'dist', 'assets'), { recursive: true })
-  const html = '<!doctype html><html><head><script src="/assets/a.js"></script></head><body>hi</body></html>'
+  const html = '<!doctype html><html><head><script src="https://cdn.example.com/a.js"></script></head><body>hi</body></html>'
   await fs.writeFile(path.join(root, 'dist', 'index.html'), html)
   await fs.writeFile(path.join(root, 'dist', 'assets', 'a.js'), 'console.log(1)')
   return {
@@ -51,7 +50,7 @@ interface Fixture {
   gets: string[]
   deploys: DeployPayload[]
   deployResult: AppEntry | Error
-  uploads: Array<{ key: string; body?: Buffer; contentType?: string }>
+  uploads: Array<{ key: string }>
   failOn?: (input: UploadInput) => boolean
   scriptResult?: 'ok' | 'fail' | 'cancel'
   scriptEnvs?: Array<Record<string, string>>
@@ -62,7 +61,7 @@ function makeServices(fix: Fixture): PublishServices {
     async upload(input) {
       fix.events.push(`upload:${input.key}`)
       if (fix.failOn?.(input)) throw new Error('mock oss 请求失败')
-      fix.uploads.push({ key: input.key, body: input.body, contentType: input.contentType })
+      fix.uploads.push({ key: input.key })
     }
   }
   return {
@@ -121,11 +120,11 @@ async function runPublish(fix: Fixture, project: unknown, script: ScriptRunner |
   return { outcome, progress, controller }
 }
 
-test('新应用完整链路：顺序、副本、登记字段与访问地址', async () => {
+test('新应用完整链路：顺序、直传、登记字段与访问地址', async () => {
   const { root, htmlOnDisk, project } = await makeProject()
   const fix: Fixture = {
     events: [],
-    appQueue: [null],
+    appQueue: [],
     gets: [],
     deploys: [],
     deployResult: entryFixture(),
@@ -134,7 +133,7 @@ test('新应用完整链路：顺序、副本、登记字段与访问地址', as
     scriptEnvs: []
   }
   const { outcome } = await runPublish(fix, project, scriptRunner(fix))
-  assert.deepEqual(fix.events.slice(0, 2), ['get', 'script'])
+  assert.deepEqual(fix.events.slice(0, 1), ['script'])
   assert.deepEqual(fix.events.filter(e => e.startsWith('upload:')).sort(), [`upload:my-app/${NOW}/assets/a.js`, `upload:my-app/${NOW}/index.html`])
   assert.equal(fix.events[fix.events.length - 1], 'deploy')
   assert.deepEqual(fix.deploys[0], {
@@ -149,11 +148,9 @@ test('新应用完整链路：顺序、副本、登记字段与访问地址', as
     GOLIVE_VERSION: String(NOW),
     GOLIVE_ASSET_BASE: 'https://static.example.com/my-app/1788782400000/'
   })
-  const htmlUpload = fix.uploads.find(u => u.key.endsWith('index.html'))!
-  assert.equal(htmlUpload.contentType, 'text/html; charset=utf-8')
-  assert.ok(htmlUpload.body!.toString().includes('<base href="https://static.example.com/my-app/1788782400000/">'))
+  // 按原始路径直传、内容零改写
+  assert.deepEqual(fix.uploads.map(u => u.key).sort(), [`my-app/${NOW}/assets/a.js`, `my-app/${NOW}/index.html`])
   assert.equal(await fs.readFile(path.join(root, 'dist', 'index.html'), 'utf8'), htmlOnDisk)
-  assert.deepEqual(fix.uploads.find(u => u.key.endsWith('a.js')), { key: 'my-app/1788782400000/assets/a.js', body: undefined, contentType: undefined })
   assert.deepEqual(outcome, {
     status: 'published',
     url: 'https://my-app.lightfish.top/',
@@ -163,32 +160,30 @@ test('新应用完整链路：顺序、副本、登记字段与访问地址', as
   await fs.rm(root, { recursive: true, force: true })
 })
 
-test('已有应用沿用服务端域名并在其上递增版本', async () => {
+test('已有应用重复发布：请求始终携带建议域名，访问地址以服务端返回为准', async () => {
   const { project } = await makeProject('', '')
-  const serverVersion = NOW + 50
   const fix: Fixture = {
     events: [],
-    appQueue: [entryFixture({ domain: 'real.example.com', currentVersion: serverVersion })],
+    appQueue: [],
     gets: [],
     deploys: [],
-    deployResult: entryFixture({ domain: 'real.example.com', currentVersion: serverVersion + 1, ossIndexUrl: `https://static.example.com/my-app/${serverVersion + 1}/index.html` }),
+    deployResult: entryFixture({ domain: 'real.example.com', currentVersion: NOW, ossIndexUrl: `https://static.example.com/my-app/${NOW}/index.html` }),
     uploads: []
   }
   const { outcome } = await runPublish(fix, project, undefined)
-  assert.equal(fix.deploys[0].domain, undefined)
-  assert.equal(fix.deploys[0].version, serverVersion + 1)
-  assert.equal(fix.deploys[0].note, undefined)
-  assert.deepEqual(outcome, { status: 'published', url: 'https://real.example.com/', version: serverVersion + 1, ossIndexUrl: `https://static.example.com/my-app/${serverVersion + 1}/index.html` })
+  assert.equal(fix.deploys[0].domain, 'my-app.lightfish.top')
+  assert.equal(fix.deploys[0].version, NOW)
+  assert.deepEqual(outcome, { status: 'published', url: 'https://real.example.com/', version: NOW, ossIndexUrl: `https://static.example.com/my-app/${NOW}/index.html` })
 })
 
 test('脚本失败不上传不登记', async () => {
   const { project } = await makeProject()
-  const fix: Fixture = { events: [], appQueue: [null], gets: [], deploys: [], deployResult: entryFixture(), uploads: [], scriptResult: 'fail', scriptEnvs: [] }
+  const fix: Fixture = { events: [], appQueue: [], gets: [], deploys: [], deployResult: entryFixture(), uploads: [], scriptResult: 'fail', scriptEnvs: [] }
   const controller = createPublishController()
   const services = makeServices(fix)
   services.runScript = scriptRunner(fix)
   await assert.rejects(controller.publish(project, settings, services, () => {}), /退出码 2/)
-  assert.deepEqual(fix.events, ['get', 'script'])
+  assert.deepEqual(fix.events, ['script'])
   assert.equal(fix.deploys.length, 0)
 })
 
@@ -196,7 +191,7 @@ test('部分上传失败不登记新版本', async () => {
   const { project } = await makeProject('')
   const fix: Fixture = {
     events: [],
-    appQueue: [null],
+    appQueue: [],
     gets: [],
     deploys: [],
     deployResult: entryFixture(),
@@ -210,28 +205,36 @@ test('部分上传失败不登记新版本', async () => {
   assert.equal(fix.uploads.length, 1)
 })
 
-test('停用应用直接失败且不执行脚本', async () => {
+test('停用应用：deploy 成功但生成访问地址失败并提示停用', async () => {
   const { project } = await makeProject()
-  const fix: Fixture = { events: [], appQueue: [entryFixture({ enable: false })], gets: [], deploys: [], deployResult: entryFixture(), uploads: [], scriptResult: 'ok', scriptEnvs: [] }
+  const fix: Fixture = {
+    events: [],
+    appQueue: [],
+    gets: [],
+    deploys: [],
+    deployResult: entryFixture({ enable: false }),
+    uploads: [],
+    scriptResult: 'ok',
+    scriptEnvs: []
+  }
   const controller = createPublishController()
   const services = makeServices(fix)
   services.runScript = scriptRunner(fix)
   await assert.rejects(controller.publish(project, settings, services, () => {}), /停用/)
-  assert.deepEqual(fix.events, ['get'])
+  assert.equal(fix.deploys.length, 1)
 })
 
 test('deploy 网络失败后经查询确认登记成功', async () => {
   const { project } = await makeProject('')
   const fix: Fixture = {
     events: [],
-    appQueue: [null, entryFixture({ currentVersion: NOW, ossIndexUrl: `https://static.example.com/my-app/${NOW}/index.html` })],
+    appQueue: [entryFixture({ currentVersion: NOW, ossIndexUrl: `https://static.example.com/my-app/${NOW}/index.html` })],
     gets: [],
     deploys: [],
     deployResult: new NetworkError('无法连接网关：timeout'),
     uploads: []
   }
   const { outcome } = await runPublish(fix, project, undefined)
-  assert.deepEqual(fix.events.slice(0, 1), ['get'])
   assert.deepEqual(fix.events.filter(e => e.startsWith('upload:')).sort(), [`upload:my-app/${NOW}/assets/a.js`, `upload:my-app/${NOW}/index.html`])
   assert.deepEqual(fix.events.slice(-2), ['deploy', 'get'])
   assert.deepEqual(outcome, {
@@ -246,7 +249,7 @@ test('deploy 网络失败且查询无法确认时报结果待确认', async () =
   const { project } = await makeProject('')
   const fix: Fixture = {
     events: [],
-    appQueue: [null, null],
+    appQueue: [null, null, null],
     gets: [],
     deploys: [],
     deployResult: new NetworkError('无法连接网关：timeout'),
@@ -258,14 +261,14 @@ test('deploy 网络失败且查询无法确认时报结果待确认', async () =
     assert.equal(outcome.version, NOW)
     assert.ok(outcome.message.includes('待确认'))
   }
-  assert.deepEqual(fix.gets, ['my-app', 'my-app', 'my-app', 'my-app'])
+  assert.deepEqual(fix.gets, ['my-app', 'my-app', 'my-app'])
 })
 
 test('deploy 响应与请求不一致时报待确认', async () => {
   const { project } = await makeProject('')
   const fix: Fixture = {
     events: [],
-    appQueue: [null],
+    appQueue: [],
     gets: [],
     deploys: [],
     deployResult: entryFixture({ currentVersion: NOW - 1 }),
@@ -279,7 +282,7 @@ test('服务端明确拒绝发布时直接报错', async () => {
   const { project } = await makeProject('')
   const fix: Fixture = {
     events: [],
-    appQueue: [null],
+    appQueue: [],
     gets: [],
     deploys: [],
     deployResult: new ApiError(`版本号已存在，禁止重复发布: ${NOW}`, 400),
@@ -295,7 +298,7 @@ test('单 HTML 文件以 index.html 入口上传', async () => {
   const file = path.join(root, 'page.html')
   await fs.writeFile(file, '<!doctype html><title>t</title>ok')
   const single = { ...project, source: file, cwd: root, upload: file, entry: 'index.html', script: '' }
-  const fix: Fixture = { events: [], appQueue: [null], gets: [], deploys: [], deployResult: entryFixture(), uploads: [] }
+  const fix: Fixture = { events: [], appQueue: [], gets: [], deploys: [], deployResult: entryFixture(), uploads: [] }
   const { outcome } = await runPublish(fix, single, undefined)
   assert.deepEqual(fix.uploads.map(u => u.key), [`my-app/${NOW}/index.html`])
   assert.equal(fix.deploys[0].ossIndexUrl, `https://static.example.com/my-app/${NOW}/index.html`)
@@ -311,4 +314,18 @@ test('连接配置缺失时不发起任何请求', async () => {
     /全局连接配置未完成/
   )
   assert.deepEqual(fix.events, [])
+})
+
+test('资源引用校验失败以 failed 结果返回，不走 reject', async () => {
+  const { root, project } = await makeProject('')
+  // 写入一个包含根路径引用的 HTML（不走完整 URL），触发 AssetRefError
+  await fs.writeFile(path.join(root, 'dist', 'index.html'), '<!doctype html><script src="/assets/a.js"></script>')
+  const fix: Fixture = { events: [], appQueue: [], gets: [], deploys: [], deployResult: entryFixture(), uploads: [] }
+  const { outcome } = await runPublish(fix, project, undefined)
+  assert.equal(outcome.status, 'failed')
+  if (outcome.status === 'failed') {
+    assert.equal(outcome.code, 'asset-base')
+    assert.ok(outcome.message.includes('404'))
+  }
+  assert.equal(fix.deploys.length, 0)
 })

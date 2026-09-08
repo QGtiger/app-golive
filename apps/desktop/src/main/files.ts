@@ -1,11 +1,18 @@
+/**
+ * 输入识别与上传内容收集：
+ * - inspectSource：拖入/选择时运行，识别三种输入并生成配置建议（不执行任何项目代码）；
+ * - collectFiles：发布时扫描上传清单，完成安全、入口与资源引用校验；
+ * - 不改写任何文件内容（含 HTML/CSS）：产物必须自洽——HTML 资源引用需要完整 URL，
+ *   由业务构建时注入资源基址（如 vite build --base "$GOLIVE_ASSET_BASE"）保证。
+ */
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { load } from 'cheerio'
 import type { Project } from '@golive/core'
-import { assetUrl } from '@golive/core'
 
+// 扫描时排除的目录/文件名（隐藏文件与 .env* 在 walk 内另行过滤）
 const ignored = new Set(['node_modules', '.git', '.DS_Store', '.env', '.npmrc', '.yarnrc', '.pnpm-store'])
-export interface UploadFile { absolute: string; key: string; size: number }
+export interface UploadFile { absolute: string; key: string }
 export async function exists(file: string): Promise<boolean> {
   try { await fs.access(file); return true } catch { return false }
 }
@@ -40,6 +47,8 @@ export async function collectFiles(project: Project): Promise<{ files: UploadFil
   if (targetStat.isSymbolicLink()) throw new Error('上传目标不能是符号链接，请选择实际文件或目录')
   const files: UploadFile[] = []
   if (targetStat.isFile()) {
+    // 单文件模式：检测明显的本地资源依赖（相对 src/href、本地 url()），
+    // 有依赖就提示改选完整文件夹，避免发布后页面资源 404（PRODUCT §4）
     if (!/\.html?$/i.test(target)) throw new Error('单文件发布仅支持 HTML')
     const html = await fs.readFile(target, 'utf8')
     const $ = load(html)
@@ -48,12 +57,17 @@ export async function collectFiles(project: Project): Promise<{ files: UploadFil
       return value && !/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(value)
     }) || /url\(\s*['"]?(?!data:|https?:|\/\/|#)[^)'"\s]+/i.test(html)
     if (localAssets) throw new Error('这个 HTML 引用了本地资源。请改选包含 JS、CSS、图片的整个文件夹，并指定入口文件。')
-    return { files: [{ absolute: target, key: 'index.html', size: targetStat.size }], entryKey: 'index.html' }
+    files.push({ absolute: target, key: 'index.html' })
+    await assertBundledRefs(files)
+    return { files, entryKey: 'index.html' }
   }
   if (!targetStat.isDirectory()) throw new Error('上传内容必须是文件夹或 HTML 文件')
   const root = await fs.realpath(target)
+  // 入口必须位于上传目录内（拒绝越界）且是 HTML，可指向子目录
   const entry = path.resolve(root, project.entry)
   if (!inside(root, entry) || !/\.html?$/i.test(entry)) throw new Error('入口必须是上传目录内的 HTML 文件')
+  // 递归扫描：跳过排除项与隐藏文件；符号链接直接报错（不跟随）；
+  // 文件数量设上限，防止误选整个用户目录
   async function walk(dir: string) {
     const children = await fs.readdir(dir, { withFileTypes: true })
     for (const child of children.sort((a, b) => a.name.localeCompare(b.name))) {
@@ -61,41 +75,81 @@ export async function collectFiles(project: Project): Promise<{ files: UploadFil
       const absolute = path.join(dir, child.name)
       if (child.isSymbolicLink()) throw new Error(`上传目录包含符号链接：${path.relative(root, absolute)}。请移除链接或选择实际产物目录。`)
       if (child.isDirectory()) await walk(absolute)
-      else if (child.isFile()) files.push({ absolute, key: path.relative(root, absolute).split(path.sep).join('/'), size: (await fs.stat(absolute)).size })
+      else if (child.isFile()) files.push({ absolute, key: path.relative(root, absolute).split(path.sep).join('/') })
       if (files.length > 30000) throw new Error('文件过多，请确认选择的是构建产物目录')
     }
   }
   await walk(root)
   const entryKey = path.relative(root, entry).split(path.sep).join('/')
   if (!files.some(file => file.key === entryKey)) throw new Error(`未找到入口文件：${project.entry}`)
+  await assertBundledRefs(files)
   return { files, entryKey }
 }
-// Gateway serves the HTML at its own domain. Rebase asset references without modifying local files.
-export function prepareHtml(html: string, fileKey: string, publicRoot: string): string {
-  const $ = load(html)
-  const documentUrl = assetUrl(publicRoot, fileKey)
-  const oldBase = $('base[href]').first().attr('href')
-  const relativeBase = oldBase ? new URL(oldBase, documentUrl).href : new URL('.', documentUrl).href
-  $('base').remove()
-  $('head').prepend($('<base>').attr('href', relativeBase))
-  const rebaseRoot = (value: string) => value.startsWith('/') && !value.startsWith('//') ? `${publicRoot.replace(/\/$/, '')}${value}` : value
-  $('[src],[href],[poster],[data]').each((_, el) => {
-    const node = $(el)
-    for (const attr of ['src', 'href', 'poster', 'data']) {
-      if (node.is('a,base') && attr === 'href') continue
-      const value = node.attr(attr)
-      if (value) node.attr(attr, rebaseRoot(value))
-    }
-  })
-  $('[srcset]').each((_, el) => {
-    const node = $(el), value = node.attr('srcset')!
-    if (!value.includes('data:')) node.attr('srcset', value.replace(/(^|,)(\s*)(\/[^/\s,][^\s,]*)/g, (_, a, b, c) => `${a}${b}${rebaseRoot(c)}`))
-  })
-  $('style').each((_, el) => { $(el).text(prepareCss($(el).text(), publicRoot)) })
-  $('[style]').each((_, el) => { $(el).attr('style', prepareCss($(el).attr('style')!, publicRoot)) })
-  return $.html()
+
+// —— 资源引用校验：不改写文件，只检查构建产物是否自洽 ——
+
+/** HTML 引用必须完整指向最终地址（完整 URL / 协议相对 / data: 等协议）；相对与根路径在网关域名下会 404 */
+function badHtmlRef(value: string): boolean {
+  const trimmed = value.trim()
+  return Boolean(trimmed) && !/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(trimmed)
 }
-export function prepareCss(css: string, publicRoot: string): string {
-  return css.replace(/url\(\s*(['"]?)(\/[^/][^)'"\s]*)\1\s*\)/g, (_, quote, value) => `url(${quote}${publicRoot.replace(/\/$/, '')}${value}${quote})`)
-    .replace(/(@import\s+['"])(\/[^/][^'"]*)(['"])/g, (_, a, b, c) => `${a}${publicRoot.replace(/\/$/, '')}${b}${c}`)
+
+/** CSS 由 OSS 直接提供，相对地址相对 CSS 文件自身解析、天然自洽；只有根路径 /... 会指向网关域名 */
+function isCssRootRef(value: string): boolean {
+  return /^\/(?!\/)/.test(value.trim())
+}
+
+function srcsetHasBadRef(value: string): boolean {
+  return value.split(',').some(part => badHtmlRef(part.trim().split(/\s+/)[0] ?? ''))
+}
+
+function scanHtml(html: string): string[] {
+  const bad: string[] = []
+  for (const match of html.matchAll(/\s(src|srcset|poster)\s*=\s*(["'])(.*?)\2/gi)) {
+    const name = match[1].toLowerCase()
+    const value = match[3]
+    if (name === 'srcset' ? srcsetHasBadRef(value) : badHtmlRef(value)) bad.push(`${name}="${value}"`)
+  }
+  for (const tag of html.matchAll(/<link\b[^>]*>/gi)) {
+    const href = /href\s*=\s*(["'])(.*?)\1/i.exec(tag[0])?.[2]
+    if (href && badHtmlRef(href)) bad.push(`link href="${href}"`)
+  }
+  return bad
+}
+
+function scanCss(css: string): string[] {
+  const bad: string[] = []
+  for (const match of css.matchAll(/url\(\s*(['"]?)([^)'"]*)\1\s*\)/gi)) {
+    if (isCssRootRef(match[2])) bad.push(`url(${match[2]})`)
+  }
+  for (const match of css.matchAll(/@import\s+(['"])(.*?)\1/gi)) {
+    if (isCssRootRef(match[2])) bad.push(`@import "${match[2]}"`)
+  }
+  return bad
+}
+
+// 校验失败即发布失败：资源正确性交还给构建侧，客户端只检查不修补
+// 文案精简，修复引导由界面层的“修复 Prompt”区域承载
+export class AssetRefError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AssetRefError'
+  }
+}
+
+async function assertBundledRefs(files: UploadFile[]): Promise<void> {
+  const problems: string[] = []
+  for (const file of files) {
+    if (/\.html?$/i.test(file.key)) {
+      const refs = scanHtml(await fs.readFile(file.absolute, 'utf8'))
+      problems.push(...refs.map(ref => `${file.key} → ${ref}`))
+    } else if (/\.css$/i.test(file.key)) {
+      const refs = scanCss(await fs.readFile(file.absolute, 'utf8'))
+      problems.push(...refs.map(ref => `${file.key} → ${ref}`))
+    }
+    if (problems.length >= 2) break
+  }
+  if (problems.length) {
+    throw new AssetRefError(`产物存在未指向 OSS 的资源引用（${problems.slice(0, 2).join('；')}），发布后会 404，已停止发布`)
+  }
 }
