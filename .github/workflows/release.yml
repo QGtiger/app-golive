@@ -75,4 +75,4 @@ jobs:
             artifacts/**/*.dmg
             artifacts/**/GoLive*.exe
             artifacts/**/*.blockmap
-            artifacts/**/latest*.yml
+            artifacts/mac-arm64-build/**/latest*.yml
