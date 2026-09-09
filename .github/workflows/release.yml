@@ -18,7 +18,7 @@ jobs:
           - os: macos-14
             artifact_name: mac-x64
             arch: x64
-            build_script: build:mac
+            build_script: build:mac-x64
           - os: windows-2022
             artifact_name: win-x64
             arch: x64
@@ -66,9 +66,11 @@ jobs:
           path: artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          draft: true
-          files: |
-            artifacts/**/*.dmg
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --draft \
+            --title "GoLive ${{ github.ref_name }}" \
+            artifacts/**/*.dmg \
             artifacts/**/GoLive*.exe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
