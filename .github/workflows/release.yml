@@ -52,6 +52,8 @@ jobs:
           path: |
             apps/desktop/dist/**/*.dmg
             apps/desktop/dist/**/GoLive*.exe
+            apps/desktop/dist/**/*.blockmap
+            apps/desktop/dist/**/latest*.yml
 
   release:
     needs: [build]
@@ -72,3 +74,5 @@ jobs:
           files: |
             artifacts/**/*.dmg
             artifacts/**/GoLive*.exe
+            artifacts/**/*.blockmap
+            artifacts/**/latest*.yml
