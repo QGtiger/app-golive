@@ -87,5 +87,5 @@ export function saveSettings(settings: Settings) {
 // 提供给渲染进程的完整视图（含明文凭据），设置页直接回显编辑
 export async function publicState() {
   const state = await readState()
-  return { settings: state.settings, projects: state.projects }
+  return { settings: state.settings, projects: state.projects, version: app.getVersion() }
 }

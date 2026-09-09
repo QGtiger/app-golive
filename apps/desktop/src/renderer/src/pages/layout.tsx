@@ -9,12 +9,13 @@ import { AppModelProvider, useApp } from '../appModel'
 import { UpdateBanner } from '../components/UpdateBanner'
 
 function Shell() {
-  const { ready } = useApp()
+  const { ready, version } = useApp()
   if (!ready) return null
   return (
     <div className="app">
       <UpdateBanner />
       <Outlet />
+      <div className="version-bar">GoLive v{version}</div>
     </div>
   )
 }

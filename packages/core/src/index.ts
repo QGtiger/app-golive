@@ -86,6 +86,8 @@ export type PublishOutcome =
 export interface SavedState {
   settings: Settings
   projects: Project[]
+  /** 当前应用版本号（来自 package.json） */
+  version: string
 }
 
 export interface DesktopAPI {

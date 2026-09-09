@@ -15,6 +15,8 @@ import { api } from './api'
 export interface AppModel {
   /** 初始状态是否已从主进程加载完成 */
   ready: boolean
+  /** 当前客户端版本号 */
+  version: string
   settings: Settings | null
   projects: Project[]
   /** 有发布任务进行中时为该项目 id，否则 null */
@@ -96,6 +98,7 @@ function useAppModel(): AppModel {
 
   return {
     ready,
+    version: stateRequest.data?.version ?? '0.0.0',
     settings,
     projects: stateRequest.data?.projects ?? [],
     activePublishProjectId,
