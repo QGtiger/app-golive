@@ -55,6 +55,9 @@ const api: DesktopAPI = {
   // 打开持久化文件所在目录（Finder / 资源管理器）
   openDataDir: () => ipcRenderer.invoke('util:open-data-dir'),
 
+  // 打开日志目录
+  openLogDir: () => ipcRenderer.invoke('util:open-log-dir'),
+
   // 订阅发布进度事件（阶段切换 / 上传计数 / 脚本日志 / 失败信息）。
   // 返回解绑函数，组件卸载时调用以移除监听。
   onProgress: (callback: (progress: Progress) => void) => {
@@ -70,24 +73,12 @@ const api: DesktopAPI = {
     return () => ipcRenderer.removeListener('project:open-path', listener)
   },
 
-  // 自动更新：订阅状态 / 下载进度 / 完成事件
+  // 自动更新：订阅状态变化
   onUpdateStatus: (callback: (status: string, info?: { version: string; releaseDate: string }) => void) => {
     const listener = (_event: unknown, status: string, info: unknown) => callback(status, info as { version: string; releaseDate: string } | undefined)
     ipcRenderer.on('update:status', listener)
     return () => ipcRenderer.removeListener('update:status', listener)
-  },
-  onUpdateProgress: (callback: (percent: number) => void) => {
-    const listener = (_event: unknown, percent: number) => callback(percent)
-    ipcRenderer.on('update:download-progress', listener)
-    return () => ipcRenderer.removeListener('update:download-progress', listener)
-  },
-  onUpdateDownloaded: (callback: (version: string) => void) => {
-    const listener = (_event: unknown, version: string) => callback(version)
-    ipcRenderer.on('update:downloaded', listener)
-    return () => ipcRenderer.removeListener('update:downloaded', listener)
-  },
-  downloadUpdate: () => ipcRenderer.invoke('update:download'),
-  installUpdate: () => ipcRenderer.invoke('update:install')
+  }
 }
 
 contextBridge.exposeInMainWorld('golive', api)

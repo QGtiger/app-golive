@@ -13,9 +13,10 @@ import { httpUrl, projectSchema, settingsSchema, type Progress } from '@golive/c
 import { inspectSource } from './files'
 import { createGateway } from './gateway'
 import { createPublishController } from './publish'
-import { initAutoUpdater, downloadUpdate, installUpdate } from './updater'
+import { initAutoUpdater } from './updater'
 import { publicState, removeProject, saveProject, saveSettings } from './store'
 import { createOssUploader } from './upload'
+import { log } from './logger'
 
 process.env.DIST = path.join(__dirname, '../dist')
 process.env.VITE_PUBLIC = process.env.VITE_PUBLIC || path.join(__dirname, process.env.ELECTRON_RENDERER_URL ? '../public' : '../dist')
@@ -145,9 +146,8 @@ function registerIpc() {
   })
   // 打开持久化文件所在目录（Finder / 资源管理器）
   ipcMain.handle('util:open-data-dir', () => shell.openPath(app.getPath('userData')))
-  // 自动更新：用户确认下载或安装
-  ipcMain.handle('update:download', () => downloadUpdate())
-  ipcMain.handle('update:install', () => installUpdate())
+  // 打开日志目录
+  ipcMain.handle('util:open-log-dir', () => shell.openPath(app.getPath('logs')))
 }
 
 function createWindow() {
@@ -218,6 +218,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  log.info(`GoLive v${app.getVersion()} 启动 —— ${process.platform} ${process.arch} Electron ${process.versions.electron}`)
+  log.info(`用户数据目录：${app.getPath('userData')}`)
   buildAppMenu()
   app.setAboutPanelOptions({
     applicationName: 'GoLive',
@@ -226,6 +228,7 @@ app.whenReady().then(() => {
   })
   registerIpc()
   createWindow()
+  log.info('窗口已创建')
   initAutoUpdater(win!)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -235,6 +238,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   // 退出前终止进行中的发布任务，不留孤儿脚本进程
   publishController.cancel()
+  log.info('GoLive 退出')
   // macOS 惯例：窗口全部关闭后应用驻留 Dock，通过 activate 再开窗
   if (process.platform !== 'darwin') app.quit()
 })

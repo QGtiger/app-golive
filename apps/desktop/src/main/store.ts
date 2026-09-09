@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { defaultSettings, projectSchema, type Project, type Settings } from '@golive/core'
+import { log } from './logger'
 
 interface DiskState { settings: Settings; projects: Project[]; encrypted?: string }
 const blank = (): DiskState => ({ settings: { ...defaultSettings }, projects: [] })
@@ -22,18 +23,20 @@ export async function readState(): Promise<DiskState> {
     const settings: Settings = { ...defaultSettings, ...raw.settings }
     const projects = (raw.projects || []).map(p => projectSchema.parse({ ...p, id: p?.id || randomUUID() }))
     if (raw.encrypted) {
-      // 旧版加密凭据一次性迁移为明文；解不开（如应用名变更导致钥匙串失效）就丢弃，Secret 需重新填写
+      // 旧版加密凭据一次性迁移为明文；解不开就丢弃
       try {
         const secrets = JSON.parse(safeStorage.decryptString(Buffer.from(raw.encrypted, 'base64')))
         settings.accessKeySecret = settings.accessKeySecret || secrets.accessKeySecret || ''
+        log.info('已迁移旧版 safeStorage 凭据为明文')
       } catch {
-        // 忽略：继续以明文字段为准
+        log.warn('旧版安全存储凭据解密失败，已丢弃，请重新填写 Secret')
       }
       current = { settings, projects }
       void persist(current)
     } else {
       current = { settings, projects }
     }
+    log.info(`golive.json 加载成功，${projects.length} 个项目，${settings.accessKeySecret ? '已配置凭据' : '未配置凭据'}`)
     return current
   } catch (error) {
     current = undefined

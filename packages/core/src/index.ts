@@ -109,16 +109,10 @@ export interface DesktopAPI {
   onOpenPath(callback: (path: string) => void): () => void
   /** 打开持久化文件所在目录（Finder / 资源管理器） */
   openDataDir(): Promise<void>
+  /** 打开日志目录 */
+  openLogDir(): Promise<void>
   /** 自动更新：订阅状态变化 */
   onUpdateStatus(callback: (status: string, info?: { version: string; releaseDate: string }) => void): () => void
-  /** 自动更新：下载进度 */
-  onUpdateProgress(callback: (percent: number) => void): () => void
-  /** 自动更新：下载完成 */
-  onUpdateDownloaded(callback: (version: string) => void): () => void
-  /** 自动更新：确认下载 */
-  downloadUpdate(): Promise<void>
-  /** 自动更新：安装并重启 */
-  installUpdate(): Promise<void>
 }
 
 export class CancelledError extends Error {

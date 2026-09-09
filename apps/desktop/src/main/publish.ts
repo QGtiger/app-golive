@@ -24,6 +24,7 @@ import {
   type Settings
 } from '@golive/core'
 import { collectFiles, AssetRefError } from './files'
+import { log } from './logger'
 import { NetworkError, type GatewayClient } from './gateway'
 import type { ScriptRunner } from './scripts'
 import { nodeScriptRunner } from './scripts'
@@ -118,15 +119,21 @@ export function createPublishController(): PublishController {
       const connectionProblem = missingConnection(settings)
       if (connectionProblem) throw new Error(connectionProblem)
 
+      log.info(`── 开始发布 ${project.appId} ──`)
+      log.debug(`项目配置：source=${project.source} cwd=${project.cwd} upload=${project.upload} entry=${project.entry}`)
+
       // ① 生成版本号：Date.now()（安全整数校验）；跨端冲突由服务端重复版本拒绝兜底
       const version = safeVersion(services.now?.() ?? Date.now())
       const publicRoot = settings.publicBaseUrl.replace(/\/+$/, '')
       const assetBase = `${publicRoot}/${project.appId}/${version}/`
+      log.info(`版本号：${version}`)
 
       // ③ 执行发布前脚本：注入 GOLIVE_* 环境变量、日志脱敏后实时转发；非零退出即终止
       if (project.script.trim()) {
         active.stage = 'build'
         emit({ stage: 'build', message: '正在执行发布前脚本…' })
+        log.info(`① 执行发布前脚本（${project.script.trim().split('\n')[0]}）`)
+        log.debug(`注入环境变量：GOLIVE_APP_ID=${project.appId} GOLIVE_VERSION=${version} GOLIVE_ASSET_BASE=${assetBase}`)
         const runner = services.runScript ?? nodeScriptRunner
         const run = runner.run({
           script: project.script,
@@ -142,6 +149,7 @@ export function createPublishController(): PublishController {
         active.killScript = run.cancel
         try {
           await run.done
+          log.info('✓ 脚本退出码 0')
         } finally {
           active.killScript = undefined
         }
@@ -150,8 +158,10 @@ export function createPublishController(): PublishController {
 
       // ④ 扫描上传内容：排除规则、入口校验、符号链接拒绝与资源引用校验都在 collectFiles 内完成
       emit({ stage: 'prepare', message: '正在扫描上传内容…' })
+      log.info('② 扫描上传内容…')
       const { files, entryKey } = await collectFiles(project)
       const total = files.length
+      log.debug(`扫描完成：${total} 个文件`)
       emit({ stage: 'upload', message: '准备上传…', done: 0, total })
 
       // ⑤ 直传清单：文件按原始路径上传（键 = 应用/版本/相对路径），
@@ -161,6 +171,7 @@ export function createPublishController(): PublishController {
 
       // ⑥ 并发上传：任一文件失败即记下首个错误、停止派发新文件，且不进入登记
       active.stage = 'upload'
+      log.info(`③ 开始上传 ${total} 个文件（并发 ${UPLOAD_CONCURRENCY}）`)
       let done = 0
       let lastEmit = 0
       let firstError: Error | null = null
@@ -181,13 +192,18 @@ export function createPublishController(): PublishController {
       })
       checkCancelled()
       if (firstError) {
-        throw new Error(`有文件上传失败（已完成 ${done}/${total}）：${(firstError as Error).message}。本次发布已停止，未登记新版本。`)
+        const err = firstError as Error
+        log.error(`✗ 上传失败：${err.message}（已完成 ${done}/${total}）`)
+        throw new Error(`有文件上传失败（已完成 ${done}/${total}）：${err.message}。本次发布已停止，未登记新版本。`)
       }
+      log.info(`✓ 上传完成 ${done}/${total}`)
 
       // ⑦ 登记发布：无此 id 则新建（domain 生效），有则追加版本（服务端忽略 domain）
       active.stage = 'deploy'
       const ossIndexUrl = assetUrl(publicRoot, `${project.appId}/${version}/${entryKey}`)
       emit({ stage: 'deploy', message: '正在登记发布…' })
+      log.info('④ 登记发布（deploy）')
+      log.debug(`deploy payload: id=${project.appId} version=${version} ossIndexUrl=${ossIndexUrl} domain=${project.domain}`)
       const payload = {
         id: project.appId,
         version,
@@ -239,19 +255,23 @@ export function createPublishController(): PublishController {
       }
       const url = deployedUrl(entry, settings.protocol)
       emit({ stage: 'done', message: '发布成功', url })
+      log.info(`✓ 发布成功 —— ${url}`)
       return { status: 'published', url, version, ossIndexUrl }
     } catch (error) {
       // 取消是正常结果之一；资源引用校验失败以 failed 结果返回（不走 reject），
       // 供界面展示针对性修复引导（可复制的 Prompt）
       if (error instanceof CancelledError) {
         emit({ stage: 'cancelled', message: '已取消' })
+        log.info('用户取消发布')
         return { status: 'cancelled' }
       }
       if (error instanceof AssetRefError) {
         emit({ stage: 'error', message: error.message })
+        log.error(`✗ 资源引用校验失败：${error.message}`)
         return { status: 'failed', code: 'asset-base', message: error.message }
       }
       emit({ stage: 'error', message: (error as Error).message })
+      log.error(`✗ 发布失败：${(error as Error).message}`)
       throw error
     } finally {
       // 无论成败都释放任务锁

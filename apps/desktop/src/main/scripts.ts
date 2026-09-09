@@ -4,6 +4,7 @@
  */
 import { spawn } from 'node:child_process'
 import { CancelledError } from '@golive/core'
+import { log } from './logger'
 
 // 单次发布日志总量上限，超出即截断，防止海量构建输出拖垮 IPC 与内存
 export const MAX_LOG_BYTES = 512 * 1024
@@ -41,6 +42,7 @@ export const nodeScriptRunner: ScriptRunner = {
     })
     let cancelled = false
     let total = 0
+    const recent: string[] = []
     // 日志限流：超过总量上限后不再转发，只提示一次截断
     const forward = (chunk: Buffer) => {
       total += chunk.length
@@ -48,7 +50,10 @@ export const nodeScriptRunner: ScriptRunner = {
       if (total > MAX_LOG_BYTES) {
         if (total - chunk.length <= MAX_LOG_BYTES) onLog('\n[日志过长，后续输出已截断]\n')
       } else {
-        onLog(redact(text, secrets))
+        const redacted = redact(text, secrets)
+        recent.push(redacted)
+        if (recent.length > 10) recent.shift()
+        onLog(redacted)
       }
     }
     child.stdout.on('data', forward)
@@ -76,7 +81,10 @@ export const nodeScriptRunner: ScriptRunner = {
         if (killer) clearTimeout(killer)
         if (cancelled) reject(new CancelledError())
         else if (code === 0) resolve()
-        else reject(new Error(`脚本执行失败，退出码 ${code ?? 'null'}`))
+        else {
+          log.error(`脚本退出码 ${code}，最后输出：${recent.join('').slice(-200).trim() || '(无输出)'}`)
+          reject(new Error(`脚本执行失败，退出码 ${code ?? 'null'}`))
+        }
       })
     })
     return { done, cancel }
