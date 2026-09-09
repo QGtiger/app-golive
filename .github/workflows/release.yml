@@ -66,10 +66,9 @@ jobs:
           path: artifacts
 
       - name: Create Release
-        run: |
-          gh release create ${{ github.ref_name }} \
-            --draft \
-            --title "GoLive ${{ github.ref_name }}" \
-            $(find artifacts -name "*.dmg" -o -name "*.exe" -type f)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/GoLive*.exe
