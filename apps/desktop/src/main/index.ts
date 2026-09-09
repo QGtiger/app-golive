@@ -9,7 +9,7 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron'
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
-import { httpUrl, settingsSchema, type Progress } from '@golive/core'
+import { httpUrl, projectSchema, settingsSchema, type Progress } from '@golive/core'
 import { inspectSource } from './files'
 import { createGateway } from './gateway'
 import { createPublishController } from './publish'
@@ -124,7 +124,8 @@ function registerIpc() {
       const outcome = await publishController.publish(project, (await publicState()).settings, services, sendProgress)
       if (outcome.status === 'published') {
         try {
-          await saveProject(project)
+          const parsed = projectSchema.parse(project)
+          await saveProject({ ...parsed, url: outcome.url })
         } catch (error) {
           sendProgress({ stage: 'done', message: '发布成功', log: `\n[提示] 保存本机项目配置失败：${(error as Error).message}\n` })
         }

@@ -10,7 +10,9 @@ export const projectSchema = z.object({
   upload: z.string().min(1),
   entry: z.string().min(1),
   domain: z.string().regex(/^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+(?::\d+)?$/, '请输入域名，不包含 https:// 或路径'),
-  note: z.string().default('')
+  note: z.string().default(''),
+  /** 上次发布成功后的访问地址 */
+  url: z.string().optional()
 })
 export type Project = z.infer<typeof projectSchema>
 

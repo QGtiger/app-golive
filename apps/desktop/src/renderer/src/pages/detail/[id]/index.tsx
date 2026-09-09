@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clipboard,
+  ExternalLink,
   FileCode,
   Folder,
   MoreHorizontal,
@@ -107,6 +108,16 @@ export default function ProjectDetailPage() {
                 {armDelete ? '再点一次，确认删除本机记录' : '删除本机记录'}
               </span>
             </button>
+          )}
+          {project.url && (
+            <div className="card-row">
+              <ExternalLink size={16} color="#12b76a" />
+              <span className="grow">
+                <div className="url-text" style={{ fontSize: 12, textAlign: 'left', fontWeight: 500 }}>{project.url}</div>
+              </span>
+              <button className="link-btn" onClick={() => copy(project.url!)}>复制</button>
+              <button className="link-btn" onClick={() => openUrl(project.url!)}>打开</button>
+            </div>
           )}
           <button className="card-row" disabled={isPublishing} onClick={openConfig}>
             <FileCode size={16} />
