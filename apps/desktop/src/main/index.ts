@@ -143,6 +143,8 @@ function registerIpc() {
   ipcMain.handle('util:open', async (_event, url: string) => {
     await shell.openExternal(httpUrl(url).href)
   })
+  // 打开持久化文件所在目录（Finder / 资源管理器）
+  ipcMain.handle('util:open-data-dir', () => shell.openPath(app.getPath('userData')))
   // 自动更新：用户确认下载或安装
   ipcMain.handle('update:download', () => downloadUpdate())
   ipcMain.handle('update:install', () => installUpdate())

@@ -1,7 +1,7 @@
 /** 首页（/）：选择入口 —— 拖入 / 选择 / 最近项目；发布进行中锁定并给出查看进度入口 */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Folder, FolderOpen, Settings as SettingsIcon } from 'lucide-react'
+import { ChevronRight, Folder, FolderOpen, HardDrive, Settings as SettingsIcon } from 'lucide-react'
 import { useMemoizedFn } from 'ahooks'
 import { api } from '../api'
 import { useApp } from '../appModel'
@@ -39,9 +39,14 @@ export default function HomePage() {
       <header className="header">
         <div style={{ width: 28 }} />
         <h1>GoLive</h1>
-        <button className="icon-btn" title="全局设置" onClick={() => openSettings()}>
-          <SettingsIcon size={17} />
-        </button>
+        <div style={{ display: 'flex', gap: 2 }}>
+          <button className="icon-btn" title="打开数据目录" onClick={() => { void api.openDataDir() }}>
+            <HardDrive size={14} />
+          </button>
+          <button className="icon-btn" title="全局设置" onClick={() => openSettings()}>
+            <SettingsIcon size={17} />
+          </button>
+        </div>
       </header>
       <div className="content">
         {notice && <div className="banner warn">{notice}</div>}

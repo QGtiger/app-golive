@@ -52,6 +52,9 @@ const api: DesktopAPI = {
   // 写入系统剪贴板（复制访问链接、诊断信息用）。
   copy: text => ipcRenderer.invoke('util:copy', text),
 
+  // 打开持久化文件所在目录（Finder / 资源管理器）
+  openDataDir: () => ipcRenderer.invoke('util:open-data-dir'),
+
   // 订阅发布进度事件（阶段切换 / 上传计数 / 脚本日志 / 失败信息）。
   // 返回解绑函数，组件卸载时调用以移除监听。
   onProgress: (callback: (progress: Progress) => void) => {

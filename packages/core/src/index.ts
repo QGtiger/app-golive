@@ -107,6 +107,8 @@ export interface DesktopAPI {
   onProgress(callback: (progress: Progress) => void): () => void
   /** macOS：从 Dock 图标或访达“打开方式”打开项目文件/目录 */
   onOpenPath(callback: (path: string) => void): () => void
+  /** 打开持久化文件所在目录（Finder / 资源管理器） */
+  openDataDir(): Promise<void>
   /** 自动更新：订阅状态变化 */
   onUpdateStatus(callback: (status: string, info?: { version: string; releaseDate: string }) => void): () => void
   /** 自动更新：下载进度 */
