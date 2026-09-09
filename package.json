@@ -8,7 +8,10 @@
     "build": "pnpm --filter @golive/desktop build",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "pack": "pnpm --filter @golive/desktop run pack"
+    "pack": "pnpm --filter @golive/desktop run pack",
+    "build:mac": "pnpm --filter @golive/desktop build:mac",
+    "build:win": "pnpm --filter @golive/desktop build:win",
+    "build:linux": "pnpm --filter @golive/desktop build:linux"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

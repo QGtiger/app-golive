@@ -103,6 +103,16 @@ export interface DesktopAPI {
   onProgress(callback: (progress: Progress) => void): () => void
   /** macOS：从 Dock 图标或访达“打开方式”打开项目文件/目录 */
   onOpenPath(callback: (path: string) => void): () => void
+  /** 自动更新：订阅状态变化 */
+  onUpdateStatus(callback: (status: string, info?: { version: string; releaseDate: string }) => void): () => void
+  /** 自动更新：下载进度 */
+  onUpdateProgress(callback: (percent: number) => void): () => void
+  /** 自动更新：下载完成 */
+  onUpdateDownloaded(callback: (version: string) => void): () => void
+  /** 自动更新：确认下载 */
+  downloadUpdate(): Promise<void>
+  /** 自动更新：安装并重启 */
+  installUpdate(): Promise<void>
 }
 
 export class CancelledError extends Error {

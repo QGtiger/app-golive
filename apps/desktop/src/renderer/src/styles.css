@@ -621,3 +621,49 @@ details.log[open] > summary {
   max-height: 260px;
   overflow-y: auto;
 }
+
+/* 自动更新横幅 */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 16px;
+  background: #f0f5ff;
+  border-bottom: 1px solid #c7d7fe;
+  font-size: 12px;
+  color: var(--primary-press);
+  flex-shrink: 0;
+}
+
+.update-banner .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.update-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.update-progress .label {
+  font-size: 11px;
+}
+
+.update-progress .bar {
+  height: 4px;
+  border-radius: 2px;
+  background: #c7d7fe;
+  overflow: hidden;
+}
+
+.update-progress .fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--primary);
+  transition: width 0.3s;
+}

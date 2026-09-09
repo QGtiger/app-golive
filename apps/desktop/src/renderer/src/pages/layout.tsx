@@ -6,12 +6,14 @@
  */
 import { Outlet } from 'react-router-dom'
 import { AppModelProvider, useApp } from '../appModel'
+import { UpdateBanner } from '../components/UpdateBanner'
 
 function Shell() {
   const { ready } = useApp()
   if (!ready) return null
   return (
     <div className="app">
+      <UpdateBanner />
       <Outlet />
     </div>
   )

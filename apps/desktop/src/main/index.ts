@@ -13,6 +13,7 @@ import { httpUrl, settingsSchema, type Progress } from '@golive/core'
 import { inspectSource } from './files'
 import { createGateway } from './gateway'
 import { createPublishController } from './publish'
+import { initAutoUpdater, downloadUpdate, installUpdate } from './updater'
 import { publicState, removeProject, saveProject, saveSettings } from './store'
 import { createOssUploader } from './upload'
 
@@ -141,6 +142,9 @@ function registerIpc() {
   ipcMain.handle('util:open', async (_event, url: string) => {
     await shell.openExternal(httpUrl(url).href)
   })
+  // 自动更新：用户确认下载或安装
+  ipcMain.handle('update:download', () => downloadUpdate())
+  ipcMain.handle('update:install', () => installUpdate())
 }
 
 function createWindow() {
@@ -219,6 +223,7 @@ app.whenReady().then(() => {
   })
   registerIpc()
   createWindow()
+  initAutoUpdater(win!)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
