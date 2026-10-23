@@ -89,7 +89,7 @@ export default function HomePage() {
             {recents.length > 0 && (
               <>
                 <div className="section-title">最近项目</div>
-                <div className="card">
+                <div className="card recent-scroll">
                   {recents.map(item => (
                     <button key={item.id} className="recent-item" onClick={() => navigate(`/detail/${item.id}`)}>
                       <Folder size={17} color="#98a2b3" />
