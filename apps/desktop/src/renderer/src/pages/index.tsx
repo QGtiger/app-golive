@@ -32,7 +32,7 @@ export default function HomePage() {
   // 发布中锁定：隐藏选择入口，保留查看进度的入口
   const locked = activePublishProjectId !== null
   const running = projects.find(p => p.id === activePublishProjectId)
-  const recents = projects.filter(p => p.id).slice(0, 5)
+  const recents = projects.filter(p => p.id)
 
   return (
     <>

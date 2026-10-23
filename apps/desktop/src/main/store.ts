@@ -59,7 +59,7 @@ function enqueue<T>(action: () => Promise<T>): Promise<T> {
   writes = next.then(() => undefined, () => undefined)
   return next
 }
-// 保存/更新项目配置：按 source 去重并置顶，最多保留 12 条作为“最近项目”。
+// 保存/更新项目配置：按 source 去重并置顶，全部保留作为“最近项目”。
 // 同一 source 复用既有 id（重新拖入同目录不会换 id，/detail/:id 链接保持有效）；
 // 返回落盘后的完整记录（含 id），供调用方跳转详情页。
 export function saveProject(input: unknown): Promise<Project> {
@@ -68,7 +68,7 @@ export function saveProject(input: unknown): Promise<Project> {
     const state = await readState()
     const existing = state.projects.find(p => p.source === incoming.source)
     const project: Project = { ...incoming, id: existing?.id ?? incoming.id ?? randomUUID() }
-    await persist({ ...state, projects: [project, ...state.projects.filter(p => p.source !== project.source)].slice(0, 12) })
+    await persist({ ...state, projects: [project, ...state.projects.filter(p => p.source !== project.source)] })
     return project
   })
 }

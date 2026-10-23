@@ -180,7 +180,7 @@ sequenceDiagram
 ```jsonc
 {
   "settings": { /* 连接配置与凭据，明文 */ },
-  "projects": [ /* 最近 12 条项目配置，按路径记忆 */ ]
+  "projects": [ /* 全部最近项目配置，按路径记忆 */ ]
 }
 ```
 
